@@ -7,31 +7,45 @@ export const useListeStore = defineStore('liste', () => {
     JSON.parse(localStorage.getItem('liste-course') || '[]')
   )
 
-  const categories = [
-    { id: 'fruits',   label: 'Fruits & Légumes', emoji: '🍎' },
-    { id: 'viande',   label: 'Viande & Poisson',  emoji: '🥩' },
-    { id: 'laitage',  label: 'Laitages',           emoji: '🧀' },
-    { id: 'epicerie', label: 'Épicerie',            emoji: '🥫' },
-    { id: 'boisson',  label: 'Boissons',            emoji: '🥤' },
-    { id: 'hygiene',  label: 'Hygiène',             emoji: '🧴' },
-    { id: 'autre',    label: 'Autre',               emoji: '📦' },
+  const categoriesDefaut = [
+    { id: 'fruits',     label: 'Fruits & Légumes',   emoji: '🍎' },
+    { id: 'viande',     label: 'Viande & Poisson',    emoji: '🥩' },
+    { id: 'laitage',    label: 'Laitages',             emoji: '🧀' },
+    { id: 'boulangerie',label: 'Boulangerie',          emoji: '🥖' },
+    { id: 'epicerie',   label: 'Épicerie',             emoji: '🥫' },
+    { id: 'surgeles',   label: 'Surgelés',             emoji: '❄️' },
+    { id: 'boisson',    label: 'Boissons',             emoji: '🥤' },
+    { id: 'hygiene',    label: 'Hygiène & Beauté',     emoji: '🧴' },
+    { id: 'maison',     label: 'Maison & Entretien',   emoji: '🏠' },
+    { id: 'animaux',    label: 'Animaux',              emoji: '🐾' },
+    { id: 'bebe',       label: 'Bébé',                 emoji: '👶' },
+    { id: 'autre',      label: 'Autre',                emoji: '📦' },
   ]
+
+  const categoriesCustom = ref(
+    JSON.parse(localStorage.getItem('liste-course-cats') || '[]')
+  )
+
+  const categories = computed(() => [
+    ...categoriesDefaut,
+    ...categoriesCustom.value,
+  ])
 
   const filtreCat = ref('tous')
   const searchQuery = ref('')
 
   // ─── Getters ─────────────────────────────────────────────
-  const total = computed(() => articles.value.length)
-  const coches = computed(() => articles.value.filter(a => a.fait).length)
+  const total      = computed(() => articles.value.length)
+  const coches     = computed(() => articles.value.filter(a => a.fait).length)
   const progression = computed(() =>
     total.value === 0 ? 0 : Math.round((coches.value / total.value) * 100)
   )
 
-  const articlesFiltres = computed(() => {
-    return articles.value
+  const articlesFiltres = computed(() =>
+    articles.value
       .filter(a => filtreCat.value === 'tous' || a.categorie === filtreCat.value)
       .filter(a => a.nom.toLowerCase().includes(searchQuery.value.toLowerCase()))
-  })
+  )
 
   const articlesByCategorie = computed(() => {
     const grouped = {}
@@ -42,11 +56,16 @@ export const useListeStore = defineStore('liste', () => {
     return grouped
   })
 
-  // ─── Actions ─────────────────────────────────────────────
+  // ─── Persistance ─────────────────────────────────────────
   function sauvegarder() {
     localStorage.setItem('liste-course', JSON.stringify(articles.value))
   }
 
+  function sauvegarderCats() {
+    localStorage.setItem('liste-course-cats', JSON.stringify(categoriesCustom.value))
+  }
+
+  // ─── Actions articles ─────────────────────────────────────
   function ajouterArticle({ nom, quantite, categorie, note }) {
     if (!nom.trim()) return
     articles.value.unshift({
@@ -63,10 +82,7 @@ export const useListeStore = defineStore('liste', () => {
 
   function toggleFait(id) {
     const article = articles.value.find(a => a.id === id)
-    if (article) {
-      article.fait = !article.fait
-      sauvegarder()
-    }
+    if (article) { article.fait = !article.fait; sauvegarder() }
   }
 
   function supprimerArticle(id) {
@@ -86,19 +102,34 @@ export const useListeStore = defineStore('liste', () => {
 
   function modifierArticle(id, modifications) {
     const article = articles.value.find(a => a.id === id)
-    if (article) {
-      Object.assign(article, modifications)
-      sauvegarder()
-    }
+    if (article) { Object.assign(article, modifications); sauvegarder() }
+  }
+
+  // ─── Actions catégories ───────────────────────────────────
+  function ajouterCategorie({ label, emoji }) {
+    if (!label.trim()) return
+    const id = 'custom_' + Date.now()
+    categoriesCustom.value.push({ id, label: label.trim(), emoji: emoji || '🏷️', custom: true })
+    sauvegarderCats()
+    return id
+  }
+
+  function supprimerCategorieCustom(id) {
+    categoriesCustom.value = categoriesCustom.value.filter(c => c.id !== id)
+    // Reclasser les articles orphelins dans "autre"
+    articles.value.forEach(a => { if (a.categorie === id) a.categorie = 'autre' })
+    sauvegarderCats()
+    sauvegarder()
   }
 
   function getCategorieInfo(id) {
-    return categories.find(c => c.id === id) || categories.at(-1)
+    return categories.value.find(c => c.id === id) || categoriesDefaut.at(-1)
   }
 
   return {
     articles,
     categories,
+    categoriesCustom,
     filtreCat,
     searchQuery,
     total,
@@ -112,6 +143,8 @@ export const useListeStore = defineStore('liste', () => {
     effacerCoches,
     viderListe,
     modifierArticle,
+    ajouterCategorie,
+    supprimerCategorieCustom,
     getCategorieInfo,
   }
 })
