@@ -165,15 +165,20 @@ function annulerEdit() {
   text-overflow: ellipsis;
 }
 
-/* Actions */
+/* Actions — toujours visibles sur tactile, au hover sur desktop */
 .article__actions {
   display: flex;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
+  opacity: 1;
 }
 
-.article:hover .article__actions { opacity: 1; }
+@media (hover: hover) {
+  .article__actions {
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .article:hover .article__actions { opacity: 1; }
+}
 
 .article__btn {
   background: none;
