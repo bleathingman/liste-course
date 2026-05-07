@@ -31,6 +31,11 @@
 
     <!-- Actions globales -->
     <div v-if="store.total > 0" class="actions">
+      <button class="btn-export" @click="exporter">
+        <Transition name="fade" mode="out-in">
+          <span :key="exportFeedback">{{ exportFeedback ? '✓ Copié !' : '📤 Exporter' }}</span>
+        </Transition>
+      </button>
       <button class="btn-secondary" @click="store.effacerCoches">
         🧹 Effacer les cochés ({{ store.coches }})
       </button>
@@ -42,94 +47,73 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useListeStore } from '@/stores/liste'
 import ArticleItem from '@/components/ArticleItem.vue'
 
 const store = useListeStore()
+const exportFeedback = ref(false)
 
 function confirmerVider() {
-  if (confirm('Vider toute la liste ?')) {
-    store.viderListe()
+  if (confirm('Vider toute la liste ?')) store.viderListe()
+}
+
+function genererTexte() {
+  const date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+  const lignes = [`🛒 Liste de course — ${date}`, '']
+
+  // Articles à faire, groupés par catégorie
+  const grouped = {}
+  store.articles
+    .filter(a => !a.fait)
+    .forEach(a => {
+      if (!grouped[a.categorie]) grouped[a.categorie] = []
+      grouped[a.categorie].push(a)
+    })
+
+  Object.entries(grouped).forEach(([catId, articles]) => {
+    const cat = store.getCategorieInfo(catId)
+    lignes.push(`${cat.emoji} ${cat.label}`)
+    articles.forEach(a => {
+      const qty = a.quantite ? ` (${a.quantite})` : ''
+      const note = a.note ? ` — ${a.note}` : ''
+      lignes.push(`• ${a.nom}${qty}${note}`)
+    })
+    lignes.push('')
+  })
+
+  // Articles déjà cochés
+  const coches = store.articles.filter(a => a.fait)
+  if (coches.length) {
+    lignes.push(`✅ Déjà dans le panier (${coches.length})`)
+    coches.forEach(a => lignes.push(`• ✓ ${a.nom}`))
+  }
+
+  return lignes.join('\n').trim()
+}
+
+async function exporter() {
+  const texte = genererTexte()
+
+  // Web Share API — natif sur mobile
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: '🛒 Ma liste de course', text: texte })
+      return
+    } catch {
+      // annulé par l'utilisateur, on ne fait rien
+      return
+    }
+  }
+
+  // Fallback : copie dans le presse-papier
+  try {
+    await navigator.clipboard.writeText(texte)
+    exportFeedback.value = true
+    setTimeout(() => (exportFeedback.value = false), 2000)
+  } catch {
+    // Dernier recours : prompt
+    prompt('Copiez votre liste :', texte)
   }
 }
 </script>
-
-<style scoped>
-.liste {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding-bottom: 80px;
-}
-
-/* Empty */
-.vide {
-  text-align: center;
-  padding: 60px 24px;
-  background: var(--paper);
-  border-radius: 8px;
-  border: 1px dashed var(--line);
-}
-
-.vide__icon { font-size: 44px; margin-bottom: 12px; }
-.vide__msg  { font-size: 13px; color: var(--muted); line-height: 1.6; }
-
-/* Groupe */
-.groupe__titre {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-
-.groupe__count {
-  background: var(--line);
-  border-radius: 10px;
-  padding: 1px 8px;
-  font-size: 10px;
-}
-
-.groupe__list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* Actions */
-.actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  padding-top: 8px;
-  border-top: 1px dashed var(--line);
-}
-
-.btn-secondary, .btn-danger {
-  font-family: 'DM Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 1px;
-  padding: 8px 18px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  cursor: pointer;
-  background: var(--paper);
-  color: var(--muted);
-  transition: all 0.2s;
-}
-
-.btn-secondary:hover { color: var(--accent); border-color: var(--accent); }
-.btn-danger:hover    { color: #e53e3e; border-color: #e53e3e; }
-
-/* Transitions */
-.list-enter-active, .list-leave-active { transition: all 0.25s ease; }
-.list-enter-from { opacity: 0; transform: translateX(-12px); }
-.list-leave-to   { opacity: 0; transform: translateX(12px); }
-</style>
